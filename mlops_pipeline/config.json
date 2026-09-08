@@ -29,7 +29,9 @@
       "saldo_mora_codeudor",
       "cuota_pactada",
       "cant_creditosvigentes",
-      "puntaje_datacredito"
+      "puntaje_datacredito",
+      "saldo_total",
+      "total_otros_prestamos"
     ],
     "umbral_nulos": 0.20
   },
@@ -73,16 +75,13 @@
   "transformaciones": {
     "log1p": [
       "salario_cliente",
-      "capital_prestado",
-      "total_otros_prestamos",
-      "saldo_total"
+      "capital_prestado"
     ]
   },
   "features": {
     "numericas": [
       "edad_cliente", "capital_prestado", "plazo_meses", "salario_cliente",
-      "total_otros_prestamos", "huella_consulta", "saldo_total",
-      "creditos_sectorFinanciero", "creditos_sectorCooperativo",
+      "huella_consulta", "creditos_sectorFinanciero", "creditos_sectorCooperativo",
       "creditos_sectorReal", "esfuerzo_pago", "saldo_relativo_ingreso",
       "carga_deuda_previa", "intensidad_busqueda_credito"
     ],
