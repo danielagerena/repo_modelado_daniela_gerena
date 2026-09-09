@@ -23,6 +23,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -414,34 +415,6 @@ class DiscretizarScore(BaseEstimator, TransformerMixin):
             )
         return X
 
-
-class TransformacionLogaritmica(BaseEstimator, TransformerMixin):
-    """Aplica log1p a las variables monetarias con fuerte asimetria.
-
-    El escalado posterior corrige el rango pero no la forma de la
-    distribucion: son problemas distintos. log1p comprime la cola larga
-    conservando el orden de los registros, lo que beneficia a los modelos
-    sensibles a la escala (regresion logistica, KNN, SVM) y resulta neutro
-    para los modelos de arbol.
-
-    Se aplica despues de calcular los ratios: transformar antes convertiria
-    log(saldo)/log(ingreso) en un cociente sin interpretacion financiera.
-    """
-
-    def __init__(self, columnas=None):
-        self.columnas = columnas
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        X = X.copy()
-        for columna in self.columnas or []:
-            if columna in X.columns:
-                X[columna] = np.log1p(X[columna])
-        return X
-
-
 # ============================================================================
 # ENSAMBLADO DE LOS PIPELINES
 # ============================================================================
@@ -495,9 +468,6 @@ def construir_pipeline_limpieza(config: dict[str, Any]) -> Pipeline:
             cortes=discretizacion["cortes"],
             etiquetas=discretizacion["etiquetas"],
         )),
-        ("logaritmo", TransformacionLogaritmica(
-            columnas=config["transformaciones"]["log1p"],
-        )),
         ("redundantes", DropColumns(columnas=eliminacion["redundantes"])),
     ])
 
@@ -527,6 +497,12 @@ def construir_preprocesador(config: dict[str, Any]) -> ColumnTransformer:
         ("escalar", StandardScaler()),
     ])
 
+    rama_numerica_log = Pipeline([
+        ("logaritmo", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
+        ("imputar", SimpleImputer(strategy="median")),
+        ("escalar", StandardScaler()),
+    ])
+
     rama_nominal = Pipeline([
         ("imputar", SimpleImputer(strategy="most_frequent")),
         ("codificar", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
@@ -544,6 +520,7 @@ def construir_preprocesador(config: dict[str, Any]) -> ColumnTransformer:
     return ColumnTransformer(
         transformers=[
             ("numericas", rama_numerica, features["numericas"]),
+            ("numericas_log", rama_numerica_log, features["numericas_log"]),
             ("nominales", rama_nominal, features["categoricas_nominales"]),
             ("ordinales", rama_ordinal, list(ordinales)),
             ("binarias", "passthrough", features["binarias"]),
@@ -705,6 +682,7 @@ def generar_datasets(config: dict[str, Any] | None = None) -> dict[str, Any]:
 
     declaradas = (
         config["features"]["numericas"]
+        + config["features"]["numericas_log"]
         + config["features"]["categoricas_nominales"]
         + list(config["features"]["categoricas_ordinales"])
         + config["features"]["binarias"]
