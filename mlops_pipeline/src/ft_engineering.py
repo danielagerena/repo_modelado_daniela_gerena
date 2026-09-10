@@ -515,6 +515,7 @@ def construir_preprocesador(config: dict[str, Any]) -> ColumnTransformer:
             handle_unknown="use_encoded_value",
             unknown_value=-1,
         )),
+        ("escalar", StandardScaler()),
     ])
 
     return ColumnTransformer(
