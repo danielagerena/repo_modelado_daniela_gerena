@@ -304,9 +304,16 @@ class ReglasCoherencia(BaseEstimator, TransformerMixin):
     def transform(self, X):
         X = X.copy()
 
-        # Una cuota superior al ingreso total es un error de registro.
+        # Una cuota superior al ingreso solo se considera error de registro
+        # cuando el ingreso mismo es invalido. Con un ingreso valido, una cuota
+        # que lo supera no es un dato mal capturado sino el caso extremo de
+        # sobreendeudamiento, y debe conservarse para que las reglas de
+        # negocio puedan evaluarlo.
         if {"cuota_pactada", "salario_cliente"} <= set(X.columns):
-            incoherente = (X["cuota_pactada"] > X["salario_cliente"]).fillna(False)
+            ingreso_invalido = X["salario_cliente"].isna() | (X["salario_cliente"] <= 0)
+            incoherente = (
+                (X["cuota_pactada"] > X["salario_cliente"]) & ingreso_invalido
+            ).fillna(False)
             X.loc[incoherente, "cuota_pactada"] = np.nan
 
         # La mora es una porcion del saldo y no puede excederlo.
@@ -314,13 +321,20 @@ class ReglasCoherencia(BaseEstimator, TransformerMixin):
             incoherente = (X["saldo_mora"] > X["saldo_total"]).fillna(False)
             X.loc[incoherente, "saldo_mora"] = np.nan
 
-        # A un empleado no se le puede pagar menos del minimo legal. No aplica
-        # a independientes, cuyo ingreso no tiene piso legal.
+        # A un empleado no se le puede pagar menos del minimo legal, de modo
+        # que un salario inferior es un dato invalido. Se anula solo cuando la
+        # cuota tambien resulta coherente con ese ingreso: si la cuota lo
+        # supera ampliamente, anular el salario impediria que las reglas de
+        # negocio evaluen el sobreendeudamiento, que es justamente el caso que
+        # deben capturar.
         if self.smmlv and {"salario_cliente", "tipo_laboral"} <= set(X.columns):
-            incoherente = (
+            bajo_minimo = (
                 (X["tipo_laboral"] == "Empleado") & (X["salario_cliente"] < self.smmlv)
             ).fillna(False)
-            X.loc[incoherente, "salario_cliente"] = np.nan
+            if "cuota_pactada" in X.columns:
+                cuota_excede = (X["cuota_pactada"] > X["salario_cliente"]).fillna(False)
+                bajo_minimo &= ~cuota_excede
+            X.loc[bajo_minimo, "salario_cliente"] = np.nan
 
         return X
 
