@@ -69,32 +69,20 @@ def cargar_artefacto(ruta: Path = RUTA_MODELO) -> dict[str, Any]:
 _pipeline_limpieza = None
 
 
-def obtener_pipeline_limpieza(config: dict[str, Any]):
+def obtener_pipeline_limpieza(config: dict[str, Any],
+                              artefacto: dict[str, Any] | None = None):
     """Devuelve el pipeline de limpieza ajustado sobre el dataset historico.
 
-    El ajuste ocurre una sola vez y se reutiliza. Reajustarlo con cada lote
-    haria que decisiones aprendidas, como que columnas superan el umbral de
-    nulos, dependieran del lote recibido: un envio con datos incompletos
-    podria eliminar una variable que el modelo espera, sin que nada falle de
-    forma visible.
-
-    Se usa fit_transform en lugar de fit porque el ultimo paso del pipeline no
-    aprende parametros, y sklearn solo considera ajustado un pipeline cuando
-    su ultimo paso expone atributos aprendidos.
+    Se toma del artefacto guardado durante el entrenamiento. Asi el despliegue
+    no necesita acceso al dataset original, lo que ademas evita reajustar el
+    pipeline con cada lote: decisiones aprendidas, como que columnas superan
+    el umbral de nulos, dependerian entonces del lote recibido.
     """
     global _pipeline_limpieza
     if _pipeline_limpieza is None:
-        historico = pd.read_csv(
-            RAIZ_PROYECTO / config["datos"]["ruta"],
-            sep=config["datos"]["separador"],
-        )
-        objetivo = config["datos"]["columna_objetivo"]
-        pipeline = construir_pipeline_limpieza(config)
-        pipeline.fit_transform(
-            historico.drop(columns=[objetivo], errors="ignore")
-        )
-        _pipeline_limpieza = pipeline
-        logger.info("Pipeline de limpieza ajustado sobre el dataset historico")
+        artefacto = artefacto or cargar_artefacto()
+        _pipeline_limpieza = artefacto["metadatos"]["pipeline_limpieza"]
+        logger.info("Pipeline de limpieza recuperado del artefacto")
     return _pipeline_limpieza
 
 
@@ -123,7 +111,7 @@ def preparar_solicitudes(crudas: pd.DataFrame,
     preparadas = entrada
     for _, paso in pipeline.steps:
         preparadas = paso.transform(preparadas)
-        
+
     fuera_de_alcance = entrada.index.difference(preparadas.index)
 
     if len(fuera_de_alcance):

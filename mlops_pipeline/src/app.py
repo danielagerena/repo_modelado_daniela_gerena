@@ -12,10 +12,11 @@ correria en produccion.
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import pandas as pd
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ft_engineering import cargar_config  # noqa: E402
 from model_deploy import (  # noqa: E402
     APROBADO,

@@ -8,10 +8,8 @@ env/
 .vscode/
 .idea/
 *.pkl
-*.joblib
 .coverage
 htmlcov/
 .pytest_cache/
 
 mlops_pipeline/reportes/
-mlops_pipeline/*.joblib

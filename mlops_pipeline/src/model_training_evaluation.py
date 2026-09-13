@@ -1106,6 +1106,15 @@ def main() -> None:
     generar_graficos(mediciones, resumen, ganador["pipeline"],
                      X_test, y_test, raiz / "mlops_pipeline" / "reportes")
 
+    from ft_engineering import construir_pipeline_limpieza
+
+    pipeline_limpieza = construir_pipeline_limpieza(config)
+    pipeline_limpieza.fit_transform(
+        pd.read_csv(
+            raiz / config["datos"]["ruta"], sep=config["datos"]["separador"]
+        ).drop(columns=[config["datos"]["columna_objetivo"]], errors="ignore")
+    )
+
     guardar_modelo(
         ganador["pipeline"],
         metadatos={
@@ -1115,16 +1124,13 @@ def main() -> None:
             "pr_auc_validacion": ganador["pr_auc"],
             "metricas_test": metricas_test,
             "features": list(X_train.columns),
-            "nota": "El pipeline espera registros limpios en unidades "
-                    "originales, tal como los produce ft_engineering.",
+            "pipeline_limpieza": pipeline_limpieza,
+            "nota": "El artefacto incluye el pipeline de limpieza ajustado, "
+                    "de modo que el despliegue no requiere acceso al dataset "
+                    "historico.",
         },
         ruta=raiz / "mlops_pipeline" / "modelo_final.joblib",
     )
-
-    resumen.to_csv(raiz / "mlops_pipeline" / "reportes" / "comparacion_modelos.csv")
-    mediciones.to_csv(
-        raiz / "mlops_pipeline" / "reportes" / "mediciones_cv.csv", index=False)
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
