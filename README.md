@@ -493,6 +493,13 @@ variable supera 0,14 de asociación con el objetivo tras eliminar la fuga.
 decisor automático.** Mejorar el desempeño requiere mejores datos —en
 particular, ingresos verificados— antes que mejores algoritmos.
 
+**Convención de etiquetas en el artefacto.** El pipeline persistido se entrena
+con el objetivo invertido, de modo que `predict_proba(X)[:, 1]` devuelve la
+probabilidad de incumplimiento. Difiere del dataset, donde `Pago_atiempo = 1`
+significa cumplimiento. `model_deploy.py` consume esa columna directamente, así
+que la decisión combinada es coherente; la convención queda registrada en los
+metadatos del artefacto.
+
 ---
 
 ## Balanceo: efecto sobre la calibración
@@ -636,7 +643,9 @@ variables se detecta antes que las variables por separado.
 La edad máxima de 85 años ilustra la diferencia: como regla de calidad
 convertiría en nulo el dato de un cliente de 88 años y lo imputaría con la
 mediana, inventando una edad falsa. Como regla de negocio, el dato se conserva
-y el cliente se rechaza con una razón auditable.
+y el cliente se rechaza con una razón auditable. La regla opera sobre edades
+dentro del rango de calidad [18, 100]; los valores de 121 a 123 años se tratan
+como error de captura, no como clientes centenarios reales.
 
 ---
 
@@ -668,6 +677,18 @@ pruebas unitarias. Los demás indicadores sí reflejan el estado del código.
   entre 0,40 y 0,65 según el escenario.
 - **Cobertura de pruebas.** Sin pruebas unitarias, los errores silenciosos se
   detectan solo por inspección manual de los resultados.
+- **Ajuste del pipeline de limpieza antes de la partición.** `DropByNullRate`
+  decide qué columnas eliminar sobre el dataset completo, no solo sobre
+  entrenamiento. El efecto es menor —las columnas eliminadas superan el 27% de
+  nulos de forma consistente— pero es una fuga leve que convendría corregir
+  moviendo el paso dentro del pipeline del modelo.
+- **SMOTE sobre variables ya codificadas.** Al interpolar entre registros, las
+  columnas one-hot generan valores fraccionarios que no corresponden a ninguna
+  categoría real. `SMOTENC`, que trata las categóricas de forma diferenciada,
+  sería más apropiado.
+- **`tiene_mora_reportada` con datos faltantes.** La expresión `saldo_mora > 0`
+  evalúa los nulos como `False`, de modo que 156 registros sin información se
+  marcan como "sin mora". Es un supuesto conservador pero no explícito.
 
 ---
 

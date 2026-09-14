@@ -729,7 +729,7 @@ def evaluar_heuristico_como_linea_base(X_test: pd.DataFrame, y_test: pd.Series,
     responder que aporta el aprendizaje automatico por encima de un sistema
     de reglas de negocio.
     """
-    from hueristic_model import construir_modelo
+    from mlops_pipeline.src.heuristic_model import construir_modelo
 
     modelo = construir_modelo(config)
     modelo.fit(X_test, y_test)
@@ -1128,6 +1128,9 @@ def main() -> None:
             "nota": "El artefacto incluye el pipeline de limpieza ajustado, "
                     "de modo que el despliegue no requiere acceso al dataset "
                     "historico.",
+            "convencion_etiquetas": "El pipeline persistido predice 1 = incumplimiento. "
+                        "predict_proba(X)[:, 1] es la probabilidad de incumplir. "
+                        "Difiere del dataset, donde Pago_atiempo = 1 significa cumplimiento.",
         },
         ruta=raiz / "mlops_pipeline" / "modelo_final.joblib",
     )
