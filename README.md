@@ -38,7 +38,7 @@ repo_modelado_daniela_gerena/
 │   │   ├── Cargar_datos.ipynb            Materialización de la fuente
 │   │   ├── comprension_eda.ipynb         Análisis exploratorio
 │   │   ├── ft_engineering.py             Limpieza, features y partición
-│   │   ├── hueristic_model.py            Reglas duras de política de crédito
+│   │   ├── heuristic_model.py            Reglas duras de política de crédito
 │   │   ├── model_training_evaluation.py  Entrenamiento, comparación y evaluación
 │   │   ├── model_deploy.py               Lógica de decisión combinada
 │   │   ├── app.py                        Interfaz Streamlit
