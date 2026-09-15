@@ -33,8 +33,7 @@ from ft_engineering import (  # noqa: E402
     cargar_config,
     construir_pipeline_limpieza,
 )
-from mlops_pipeline.src.heuristic_model import construir_modelo  # noqa: E402
-
+from heuristic_model import construir_modelo  # noqa: E402
 logger = logging.getLogger(__name__)
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[2]

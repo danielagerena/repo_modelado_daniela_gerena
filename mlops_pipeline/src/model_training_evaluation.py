@@ -729,7 +729,7 @@ def evaluar_heuristico_como_linea_base(X_test: pd.DataFrame, y_test: pd.Series,
     responder que aporta el aprendizaje automatico por encima de un sistema
     de reglas de negocio.
     """
-    from mlops_pipeline.src.heuristic_model import construir_modelo
+    from heuristic_model import construir_modelo
 
     modelo = construir_modelo(config)
     modelo.fit(X_test, y_test)
