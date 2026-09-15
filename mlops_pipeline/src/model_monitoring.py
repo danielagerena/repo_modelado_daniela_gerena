@@ -401,7 +401,12 @@ if __name__ == "__main__":
         sep=config["datos"]["separador"],
     )
 
-    logger.info("=== Lote 1: poblacion comparable a la historica ===")
+    registro = RAIZ_PROYECTO / config["monitoreo"]["ruta_registro"]
+    if registro.exists():
+        registro.unlink()
+        logger.info("Registro previo eliminado (modo demostracion)")
+
+    logger.info("=== Demostracion · Lote 1: poblacion comparable ===")
     lote_normal = historico.sample(n=500, random_state=7).reset_index(drop=True)
     registrar_predicciones(lote_normal, decidir(lote_normal, config), config)
     ejecutar_monitoreo(config)

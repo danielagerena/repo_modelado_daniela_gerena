@@ -49,6 +49,11 @@ FUERA_DE_ALCANCE = "FUERA_DE_ALCANCE"
 def cargar_artefacto(ruta: Path = RUTA_MODELO) -> dict[str, Any]:
     """Carga el pipeline entrenado junto con sus metadatos.
 
+    El artefacto se genera durante el entrenamiento dentro de este mismo
+    repositorio y no proviene de fuentes externas. joblib usa pickle, que
+    ejecuta codigo al deserializar, por lo que en un despliegue real
+    convendria verificar un hash del archivo antes de cargarlo.
+
     Raises:
         FileNotFoundError: si el modelo no ha sido generado todavia.
     """

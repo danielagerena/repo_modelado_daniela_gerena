@@ -665,7 +665,10 @@ def balancear(X_train, y_train, config: dict[str, Any]):
             "Instalalo con: pip install imbalanced-learn"
         ) from error
 
-    X_balanceado, y_balanceado = SMOTE(random_state=semilla).fit_resample(X_train, y_train)
+    X_balanceado, y_balanceado = SMOTE(
+        sampling_strategy=config["balanceo"].get("sampling_strategy", 1.0),
+        random_state=semilla,
+    ).fit_resample(X_train, y_train)
     logger.info("Entrenamiento balanceado: %d filas", len(X_balanceado))
     return X_balanceado, y_balanceado
 
