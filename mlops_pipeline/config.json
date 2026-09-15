@@ -124,6 +124,26 @@
   },
   "balanceo": {
     "metodo": "smote",
+    "sampling_strategy": 0.5,
     "aplicar_solo_en": "train"
+  },
+  "decision": {
+    "umbral_corte": 0.50,
+    "justificacion_umbral": "El minimo de costo esta en 0,60 pero detecta solo 37 de 349 morosos. Con 0,50 se detectan 75 con un rechazo del 6,7% de la cartera y un costo 5,7% superior al minimo. Se prefiere la deteccion sobre el optimo estricto de costo por razones de gestion de riesgo.",
+    "costos": {
+      "margen_sobre_capital": 0.10,
+      "severidad_perdida": 0.65,
+      "fuente": "Supuestos de negocio. Margen de intermediacion neto y severidad de la perdida (LGD) en cartera de consumo. No provienen de datos de la entidad; se acompanan de analisis de sensibilidad."
+    },
+    "tasas_rechazo_objetivo": [0.05, 0.10, 0.15]
+  },
+    "monitoreo": {
+    "ruta_registro": "mlops_pipeline/reportes/registro_predicciones.csv",
+    "umbral_psi_alerta": 0.10,
+    "umbral_psi_critico": 0.25,
+    "umbral_ks_pvalor": 0.05,
+    "bins_psi": 10,
+    "tasa_rechazo_esperada": 0.07,
+    "tolerancia_tasa_rechazo": 0.03
   }
 }

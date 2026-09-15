@@ -122,9 +122,13 @@ def build_model(clasificador, config: dict[str, Any],
     pasos = [("preprocesador", construir_preprocesador(config))]
 
     if balancear:
-        pasos.append(
-            ("balanceo", SMOTE(random_state=config["particion"]["random_state"]))
-        )
+        pasos.append((
+            "balanceo",
+            SMOTE(
+                sampling_strategy=config["balanceo"].get("sampling_strategy", 1.0),
+                random_state=config["particion"]["random_state"],
+            ),
+        ))
 
     pasos.append(("modelo", clasificador))
     return PipelineImb(pasos)
@@ -725,7 +729,7 @@ def evaluar_heuristico_como_linea_base(X_test: pd.DataFrame, y_test: pd.Series,
     responder que aporta el aprendizaje automatico por encima de un sistema
     de reglas de negocio.
     """
-    from hueristic_model import construir_modelo
+    from mlops_pipeline.src.heuristic_model import construir_modelo
 
     modelo = construir_modelo(config)
     modelo.fit(X_test, y_test)
@@ -899,6 +903,160 @@ def seleccionar_ganador(optimizados: pd.DataFrame, resumen: pd.DataFrame,
     return empatados.sort_values(
         ["cv_pr_auc", "cv_tiempo"], ascending=[False, True]
     ).iloc[0]
+
+# ============================================================================
+# UMBRAL DE CORTE
+# ============================================================================
+def analizar_umbrales(pipeline, X: pd.DataFrame, y: pd.Series,
+                      config: dict[str, Any],
+                      pasos: int = 19) -> pd.DataFrame:
+    """Evalua el efecto de cada umbral de corte sobre el negocio.
+
+    El umbral por defecto de 0,5 supone que ambos errores cuestan lo mismo y
+    que las probabilidades estan calibradas. Ninguna de las dos cosas se
+    cumple aqui: rechazar a un cliente viable cuesta el margen del credito,
+    mientras que aprobar a un moroso cuesta la porcion no recuperada del
+    capital, y el balanceo con datos sinteticos desplaza las probabilidades
+    al alza.
+
+    El costo se calcula con el capital real de cada registro, porque rechazar
+    un credito de cinco millones no equivale a rechazar uno de quinientos mil.
+
+    Args:
+        pipeline: modelo ajustado.
+        X: predictoras sin codificar.
+        y: objetivo observado.
+        config: configuracion del proyecto.
+        pasos: cantidad de umbrales a evaluar entre 0,05 y 0,95.
+
+    Returns:
+        DataFrame con una fila por umbral evaluado.
+    """
+    costos = config["decision"]["costos"]
+    margen = costos["margen_sobre_capital"]
+    severidad = costos["severidad_perdida"]
+
+    capital = np.expm1(X["capital_prestado"]) if X["capital_prestado"].max() < 30 \
+        else X["capital_prestado"]
+
+    incumplio = (y == INCUMPLE).to_numpy()
+    probabilidades = pipeline.predict_proba(X)[:, 1]
+
+    filas = []
+    for umbral in np.linspace(0.05, 0.95, pasos):
+        rechazado = probabilidades >= umbral
+
+        buenos_rechazados = rechazado & ~incumplio
+        morosos_aprobados = ~rechazado & incumplio
+        morosos_detectados = rechazado & incumplio
+
+        costo_oportunidad = (capital[buenos_rechazados] * margen).sum()
+        costo_perdida = (capital[morosos_aprobados] * severidad).sum()
+
+        filas.append({
+            "umbral": round(umbral, 3),
+            "tasa_rechazo": round(rechazado.mean(), 4),
+            "morosos_detectados": int(morosos_detectados.sum()),
+            "buenos_rechazados": int(buenos_rechazados.sum()),
+            "precision": round(
+                morosos_detectados.sum() / rechazado.sum(), 4)
+            if rechazado.sum() else 0.0,
+            "recall": round(morosos_detectados.sum() / incumplio.sum(), 4),
+            "costo_oportunidad": round(costo_oportunidad),
+            "costo_perdida": round(costo_perdida),
+            "costo_total": round(costo_oportunidad + costo_perdida),
+        })
+
+    return pd.DataFrame(filas)
+
+
+def seleccionar_umbral(tabla: pd.DataFrame,
+                       config: dict[str, Any]) -> dict[str, Any]:
+    """Elige el umbral combinando el criterio de costo y el operativo.
+
+    El criterio de costo busca el minimo de la curva de costo total. El
+    criterio operativo identifica los umbrales que producen tasas de rechazo
+    manejables para revision manual. Cuando ambos coinciden la decision es
+    solida; cuando divergen, el optimo de costo exige un volumen de rechazo
+    que la operacion no absorbe y hay que decidir explicitamente.
+
+    Returns:
+        Diccionario con el umbral de costo minimo y los umbrales operativos.
+    """
+    fila_costo = tabla.loc[tabla["costo_total"].idxmin()]
+
+    operativos = {}
+    for objetivo in config["decision"]["tasas_rechazo_objetivo"]:
+        indice = (tabla["tasa_rechazo"] - objetivo).abs().idxmin()
+        operativos[objetivo] = tabla.loc[indice]
+
+    logger.info("--- Analisis del umbral de corte ---")
+    logger.info("\n%s", tabla.to_string(index=False))
+
+    logger.info("Criterio de costo minimo: umbral %.3f", fila_costo["umbral"])
+    logger.info(
+        "    Rechaza %.1f%% de la cartera | detecta %d de %d morosos | "
+        "precision %.4f | costo total $%s",
+        fila_costo["tasa_rechazo"] * 100,
+        fila_costo["morosos_detectados"],
+        tabla["morosos_detectados"].max(),
+        fila_costo["precision"],
+        f"{int(fila_costo['costo_total']):,}",
+    )
+
+    logger.info("Criterio operativo:")
+    for objetivo, fila in operativos.items():
+        logger.info(
+            "    Rechazo objetivo %.0f%% -> umbral %.3f (rechazo real %.1f%%, "
+            "precision %.4f, detecta %d morosos)",
+            objetivo * 100, fila["umbral"], fila["tasa_rechazo"] * 100,
+            fila["precision"], fila["morosos_detectados"],
+        )
+
+    return {"costo": fila_costo, "operativos": operativos}
+
+
+def analisis_sensibilidad(pipeline, X: pd.DataFrame, y: pd.Series,
+                          config: dict[str, Any]) -> pd.DataFrame:
+    """Verifica si el umbral optimo depende de los supuestos de costo.
+
+    Los valores de margen y severidad son supuestos razonables, no datos de
+    la entidad. Si el umbral resultante se mantiene estable ante variaciones
+    amplias de esos supuestos, la decision es robusta; si cambia mucho,
+    conviene declarar que el resultado depende de parametros no verificados.
+    """
+    escenarios = [
+        ("conservador", 0.15, 0.50),
+        ("base", config["decision"]["costos"]["margen_sobre_capital"],
+         config["decision"]["costos"]["severidad_perdida"]),
+        ("agresivo", 0.06, 0.80),
+    ]
+
+    filas = []
+    for nombre, margen, severidad in escenarios:
+        config_escenario = {
+            "decision": {
+                "costos": {"margen_sobre_capital": margen,
+                           "severidad_perdida": severidad},
+                "tasas_rechazo_objetivo": [],
+            }
+        }
+        tabla = analizar_umbrales(pipeline, X, y, config_escenario)
+        mejor = tabla.loc[tabla["costo_total"].idxmin()]
+        filas.append({
+            "escenario": nombre,
+            "margen": margen,
+            "severidad": severidad,
+            "ratio_costos": round(severidad / margen, 1),
+            "umbral_optimo": mejor["umbral"],
+            "tasa_rechazo": mejor["tasa_rechazo"],
+        })
+
+    resultado = pd.DataFrame(filas)
+    logger.info("--- Sensibilidad del umbral a los supuestos de costo ---")
+    logger.info("\n%s", resultado.to_string(index=False))
+    return resultado
+
 # ============================================================================
 # EJECUCION
 # ============================================================================
@@ -930,6 +1088,13 @@ def main() -> None:
     metricas_heuristico = evaluar_heuristico_como_linea_base(
         X_test, y_test, config)
 
+    raiz = Path(__file__).resolve().parents[2]
+
+    tabla_umbrales = analizar_umbrales(
+        ganador["pipeline"], X_train, y_train, config)
+    seleccion = seleccionar_umbral(tabla_umbrales, config)
+    analisis_sensibilidad(ganador["pipeline"], X_train, y_train, config)
+
     comparacion_final = pd.DataFrame({
         "heuristico": metricas_heuristico,
         ganador["modelo"]: metricas_test,
@@ -937,9 +1102,18 @@ def main() -> None:
     logger.info("--- Aporte del aprendizaje automatico sobre las reglas ---")
     logger.info("\n%s", comparacion_final.to_string())
 
-    raiz = Path(__file__).resolve().parents[2]
+    
     generar_graficos(mediciones, resumen, ganador["pipeline"],
                      X_test, y_test, raiz / "mlops_pipeline" / "reportes")
+
+    from ft_engineering import construir_pipeline_limpieza
+
+    pipeline_limpieza = construir_pipeline_limpieza(config)
+    pipeline_limpieza.fit_transform(
+        pd.read_csv(
+            raiz / config["datos"]["ruta"], sep=config["datos"]["separador"]
+        ).drop(columns=[config["datos"]["columna_objetivo"]], errors="ignore")
+    )
 
     guardar_modelo(
         ganador["pipeline"],
@@ -950,16 +1124,16 @@ def main() -> None:
             "pr_auc_validacion": ganador["pr_auc"],
             "metricas_test": metricas_test,
             "features": list(X_train.columns),
-            "nota": "El pipeline espera registros limpios en unidades "
-                    "originales, tal como los produce ft_engineering.",
+            "pipeline_limpieza": pipeline_limpieza,
+            "nota": "El artefacto incluye el pipeline de limpieza ajustado, "
+                    "de modo que el despliegue no requiere acceso al dataset "
+                    "historico.",
+            "convencion_etiquetas": "El pipeline persistido predice 1 = incumplimiento. "
+                        "predict_proba(X)[:, 1] es la probabilidad de incumplir. "
+                        "Difiere del dataset, donde Pago_atiempo = 1 significa cumplimiento.",
         },
         ruta=raiz / "mlops_pipeline" / "modelo_final.joblib",
     )
-
-    resumen.to_csv(raiz / "mlops_pipeline" / "reportes" / "comparacion_modelos.csv")
-    mediciones.to_csv(
-        raiz / "mlops_pipeline" / "reportes" / "mediciones_cv.csv", index=False)
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
