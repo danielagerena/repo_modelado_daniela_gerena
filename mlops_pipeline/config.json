@@ -1,0 +1,108 @@
+{
+  "datos": {
+    "ruta": "Base_de_datos.csv",
+    "separador": ";",
+    "columna_objetivo": "Pago_atiempo"
+  },
+  "contexto_colombia": {
+    "smmlv": 1423500,
+    "smmlv_fuente": "Decreto 1572 de 2024 (SMMLV 2025)",
+    "edad_minima_legal": 18,
+    "score_datacredito_min": 150,
+    "score_datacredito_max": 950
+  },
+  "integracion": {
+    "decimal_coma": ["puntaje"],
+    "a_datetime": ["fecha_prestamo"],
+    "categorias_validas": {
+      "tendencia_ingresos": ["Creciente", "Decreciente", "Estable"],
+      "tipo_laboral": ["Empleado", "Independiente"]
+    },
+    "eliminar_duplicados": true
+  },
+  "eliminacion": {
+    "leakage": ["puntaje"],
+    "irrelevantes": ["fecha_prestamo"],
+    "redundantes": [
+      "saldo_principal",
+      "saldo_mora",
+      "saldo_mora_codeudor",
+      "cuota_pactada",
+      "cant_creditosvigentes",
+      "puntaje_datacredito",
+      "saldo_total",
+      "total_otros_prestamos"
+    ],
+    "umbral_nulos": 0.20
+  },
+  "alcance": {
+    "filtro_categorias": { "tipo_credito": [4, 9] }
+  },
+  "calidad": {
+    "centinelas_a_nulo": {
+      "salario_cliente": 0,
+      "promedio_ingresos_datacredito": 0
+    },
+    "reglas_rango": {
+      "edad_cliente": [18, 100],
+      "capital_prestado": [1, null],
+      "plazo_meses": [1, 180],
+      "salario_cliente": [1, 142350000],
+      "cuota_pactada": [1, null],
+      "total_otros_prestamos": [0, 711750000],
+      "puntaje_datacredito": [150, 950],
+      "cant_creditosvigentes": [0, null],
+      "huella_consulta": [0, null],
+      "saldo_mora": [0, null],
+      "saldo_total": [0, null],
+      "creditos_sectorFinanciero": [0, null],
+      "creditos_sectorCooperativo": [0, null],
+      "creditos_sectorReal": [0, null]
+    }
+  },
+  "reglas_negocio": {
+    "edad_maxima_politica": 85,
+    "fuente": "Edad maxima usual para deudores en credito de consumo en Colombia. Se evalua en el modelo heuristico, no en el filtro de calidad."
+  },
+  "discretizacion": {
+    "rango_datacredito": {
+      "origen": "puntaje_datacredito",
+      "cortes": [150, 500, 650, 800, 951],
+      "etiquetas": ["Alto_riesgo", "Regular", "Bueno", "Excelente"],
+      "fuente": "Convencion de mercado sobre la escala 150-950 de Datacredito-Experian. La central no publica tramos oficiales."
+    }
+  },
+  "transformaciones": {
+    "log1p": [
+      "salario_cliente",
+      "capital_prestado"
+    ]
+  },
+  "features": {
+    "numericas": [
+      "edad_cliente", "capital_prestado", "plazo_meses", "salario_cliente",
+      "huella_consulta", "creditos_sectorFinanciero", "creditos_sectorCooperativo",
+      "creditos_sectorReal", "esfuerzo_pago", "saldo_relativo_ingreso",
+      "carga_deuda_previa", "intensidad_busqueda_credito"
+    ],
+    "categoricas_nominales": ["tipo_credito", "tipo_laboral"],
+    "categoricas_ordinales": {
+      "rango_datacredito": ["Alto_riesgo", "Regular", "Bueno", "Excelente"]
+    },
+    "binarias": ["tiene_mora_reportada"]
+  },
+  "correlaciones": {
+    "ejecutar": true,
+    "umbral_redundancia": 0.70,
+    "umbral_irrelevancia": 0.10
+  },
+  "particion": {
+    "test_size": 0.30,
+    "random_state": 42,
+    "estratificar": true
+  },
+  "balanceo": {
+    "metodo": "smote",
+    "aplicar_solo_en": "train"
+  }
+}
