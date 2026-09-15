@@ -1,0 +1,149 @@
+{
+  "datos": {
+    "ruta": "Base_de_datos.csv",
+    "separador": ";",
+    "columna_objetivo": "Pago_atiempo"
+  },
+  "contexto_colombia": {
+    "smmlv": 1423500,
+    "smmlv_fuente": "Decreto 1572 de 2024 (SMMLV 2025)",
+    "edad_minima_legal": 18,
+    "score_datacredito_min": 150,
+    "score_datacredito_max": 950
+  },
+  "integracion": {
+    "decimal_coma": ["puntaje"],
+    "a_datetime": ["fecha_prestamo"],
+    "categorias_validas": {
+      "tendencia_ingresos": ["Creciente", "Decreciente", "Estable"],
+      "tipo_laboral": ["Empleado", "Independiente"]
+    },
+    "eliminar_duplicados": true
+  },
+  "eliminacion": {
+    "leakage": ["puntaje"],
+    "irrelevantes": ["fecha_prestamo"],
+    "redundantes": [
+      "saldo_principal",
+      "saldo_mora",
+      "saldo_mora_codeudor",
+      "cuota_pactada",
+      "cant_creditosvigentes",
+      "puntaje_datacredito",
+      "saldo_total",
+      "total_otros_prestamos"
+    ],
+    "umbral_nulos": 0.20
+  },
+  "alcance": {
+    "filtro_categorias": { "tipo_credito": [4, 9] }
+  },
+  "calidad": {
+    "centinelas_a_nulo": {
+      "salario_cliente": 0,
+      "promedio_ingresos_datacredito": 0
+    },
+    "reglas_rango": {
+      "edad_cliente": [18, 100],
+      "capital_prestado": [1, null],
+      "plazo_meses": [1, 180],
+      "salario_cliente": [1, 142350000],
+      "cuota_pactada": [1, null],
+      "total_otros_prestamos": [0, 711750000],
+      "puntaje_datacredito": [150, 950],
+      "cant_creditosvigentes": [0, null],
+      "huella_consulta": [0, null],
+      "saldo_mora": [0, null],
+      "saldo_total": [0, null],
+      "creditos_sectorFinanciero": [0, null],
+      "creditos_sectorCooperativo": [0, null],
+      "creditos_sectorReal": [0, null]
+    }
+  },
+    "reglas_heuristicas": {
+    "mora_vigente": {
+      "activa": true,
+      "variable": "tiene_mora_reportada",
+      "descripcion": "Mora vigente reportada en central de riesgo",
+      "fuente": "Circular Basica Contable y Financiera, Cap. II (SARC). Practica estandar del sector: no se otorga credito a quien incumple una obligacion vigente."
+    },
+    "score_alto_riesgo": {
+      "activa": true,
+      "variable": "rango_datacredito",
+      "categoria_rechazo": "Alto_riesgo",
+      "descripcion": "Puntaje de central en el tramo 150-499",
+      "fuente": "Escala Datacredito-Experian 150-950. El tramo inferior corresponde a perfiles con mora reciente o utilizacion muy alta de cupos."
+    },
+    "esfuerzo_pago_excesivo": {
+      "activa": true,
+      "variable": "esfuerzo_pago",
+      "umbral": 0.50,
+      "descripcion": "La cuota consume mas del 50% del ingreso",
+      "fuente": "Ley 1527 de 2012, art. 3 num. 5, ratificada por Corte Constitucional T-864 de 2014. El tope legal aplica sobre salario neto en libranza; aqui se usa como referencia sobre el ingreso declarado, lo que hace la regla mas permisiva que la norma."
+    },
+    "edad_fuera_de_politica": {
+      "activa": true,
+      "variable": "edad_cliente",
+      "umbral": 85,
+      "descripcion": "Edad superior a la maxima de politica de credito",
+      "fuente": "Edad maxima usual para deudores de credito de consumo en Colombia, ligada a los topes de los seguros de vida deudores. No se activa en la muestra actual; se incluye para datos futuros."
+    }
+  },
+  "discretizacion": {
+    "rango_datacredito": {
+      "origen": "puntaje_datacredito",
+      "cortes": [150, 500, 650, 800, 951],
+      "etiquetas": ["Alto_riesgo", "Regular", "Bueno", "Excelente"],
+      "fuente": "Convencion de mercado sobre la escala 150-950 de Datacredito-Experian. La central no publica tramos oficiales."
+    }
+  },
+  "features": {
+    "numericas": [
+      "edad_cliente", "plazo_meses",
+      "huella_consulta", "creditos_sectorFinanciero",
+      "creditos_sectorCooperativo", "creditos_sectorReal",
+      "esfuerzo_pago", "saldo_relativo_ingreso",
+      "carga_deuda_previa", "intensidad_busqueda_credito"
+    ],
+    "numericas_log": ["salario_cliente", "capital_prestado"],
+    "categoricas_nominales": ["tipo_credito", "tipo_laboral"],
+    "categoricas_ordinales": {
+      "rango_datacredito": ["Alto_riesgo", "Regular", "Bueno", "Excelente"]
+    },
+    "binarias": ["tiene_mora_reportada"]
+  },
+  "correlaciones": {
+    "ejecutar": true,
+    "umbral_redundancia": 0.70,
+    "umbral_irrelevancia": 0.10
+  },
+  "particion": {
+    "test_size": 0.30,
+    "random_state": 42,
+    "estratificar": true
+  },
+  "balanceo": {
+    "metodo": "smote",
+    "sampling_strategy": 0.5,
+    "aplicar_solo_en": "train"
+  },
+  "decision": {
+    "umbral_corte": 0.50,
+    "justificacion_umbral": "El minimo de costo esta en 0,60 pero detecta solo 37 de 349 morosos. Con 0,50 se detectan 75 con un rechazo del 6,7% de la cartera y un costo 5,7% superior al minimo. Se prefiere la deteccion sobre el optimo estricto de costo por razones de gestion de riesgo.",
+    "costos": {
+      "margen_sobre_capital": 0.10,
+      "severidad_perdida": 0.65,
+      "fuente": "Supuestos de negocio. Margen de intermediacion neto y severidad de la perdida (LGD) en cartera de consumo. No provienen de datos de la entidad; se acompanan de analisis de sensibilidad."
+    },
+    "tasas_rechazo_objetivo": [0.05, 0.10, 0.15]
+  },
+    "monitoreo": {
+    "ruta_registro": "mlops_pipeline/reportes/registro_predicciones.csv",
+    "umbral_psi_alerta": 0.10,
+    "umbral_psi_critico": 0.25,
+    "umbral_ks_pvalor": 0.05,
+    "bins_psi": 10,
+    "tasa_rechazo_esperada": 0.07,
+    "tolerancia_tasa_rechazo": 0.03
+  }
+}

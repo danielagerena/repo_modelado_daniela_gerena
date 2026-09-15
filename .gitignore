@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+.env
+.vscode/
+.idea/
+*.pkl
+.coverage
+htmlcov/
+.pytest_cache/
+
+mlops_pipeline/reportes/
