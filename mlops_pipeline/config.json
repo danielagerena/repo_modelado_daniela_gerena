@@ -1,7 +1,13 @@
 {
   "datos": {
+    "fuente": "bigquery",
     "ruta": "Base_de_datos.csv",
     "separador": ";",
+    "bigquery": {
+      "project_id": "retail-apps-datos-dev-01",
+      "dataset": "creditos",
+      "tabla": "dbcreditos"
+    },
     "columna_objetivo": "Pago_atiempo"
   },
   "contexto_colombia": {

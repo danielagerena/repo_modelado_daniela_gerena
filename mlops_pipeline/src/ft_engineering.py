@@ -59,8 +59,92 @@ def cargar_config(ruta: Path = RUTA_CONFIG) -> dict[str, Any]:
     return config
 
 
+def _leer_csv(parametros: dict[str, Any]) -> pd.DataFrame:
+    """Lee el dataset desde el archivo plano definido en el config.
+
+    Args:
+        parametros: seccion "datos" del config.
+
+    Returns:
+        DataFrame con los datos sin transformar.
+
+    Raises:
+        FileNotFoundError: si el archivo no existe.
+    """
+    ruta_datos = RAIZ_PROYECTO / parametros["ruta"]
+
+    if not ruta_datos.exists():
+        raise FileNotFoundError(f"No se encontro el dataset: {ruta_datos}")
+
+    return pd.read_csv(ruta_datos, sep=parametros["separador"])
+
+
+def _normalizar_tipos_bigquery(datos: pd.DataFrame) -> pd.DataFrame:
+    """Deja los tipos como los entregaria pd.read_csv.
+
+    BigQuery entrega los enteros como Int64 (entero con nulos de pandas) y las
+    fechas con zona horaria. Los enteros pasan a int64 si no tienen nulos y a
+    float64 si los tienen; las fechas pierden la zona horaria. Asi el resto
+    del pipeline recibe los mismos tipos que con el archivo plano.
+
+    Args:
+        datos: DataFrame tal como lo entrega BigQuery.
+
+    Returns:
+        DataFrame con tipos equivalentes a los de la lectura desde CSV.
+    """
+    datos = datos.copy()
+    for columna in datos.select_dtypes(include=["Int64"]).columns:
+        tipo = "int64" if datos[columna].notna().all() else "float64"
+        datos[columna] = datos[columna].astype(tipo)
+    for columna in datos.select_dtypes(include=["datetimetz"]).columns:
+        datos[columna] = datos[columna].dt.tz_localize(None)
+    return datos
+
+
+def _leer_bigquery(parametros_bq: dict[str, Any]) -> pd.DataFrame:
+    """Lee el dataset desde la tabla de BigQuery definida en el config.
+
+    La autenticacion usa las credenciales predeterminadas de aplicacion
+    (gcloud auth application-default login), sin llaves de cuenta de servicio.
+    Las filas se ordenan por su contenido completo porque BigQuery no
+    garantiza el orden de un SELECT *, y la particion train/test depende de
+    ese orden: sin ordenar, cada ejecucion podria dar metricas distintas.
+
+    Args:
+        parametros_bq: subseccion "datos.bigquery" del config.
+
+    Returns:
+        DataFrame con los datos sin transformar.
+
+    Raises:
+        ImportError: si las librerias de BigQuery no estan instaladas.
+    """
+    try:
+        from google.cloud import bigquery
+    except ImportError as error:
+        raise ImportError(
+            "Para leer desde BigQuery instale google-cloud-bigquery, db-dtypes y pyarrow"
+        ) from error
+
+    tabla = (
+        f"{parametros_bq['project_id']}.{parametros_bq['dataset']}."
+        f"{parametros_bq['tabla']}"
+    )
+    consulta = f"SELECT * FROM `{tabla}` AS t ORDER BY TO_JSON_STRING(t)"
+
+    logger.info("Consultando BigQuery: %s", tabla)
+    cliente = bigquery.Client(project=parametros_bq["project_id"])
+    datos = cliente.query(consulta).to_dataframe()
+    return _normalizar_tipos_bigquery(datos)
+
+
 def cargar_datos(config: dict[str, Any]) -> pd.DataFrame:
-    """Carga el dataset crudo segun la ruta y el separador del config.
+    """Carga el dataset crudo desde la fuente definida en el config.
+
+    La fuente se elige con config["datos"]["fuente"]: "bigquery" lee la tabla
+    configurada en GCP y "csv" lee el archivo plano. Si la clave no existe se
+    usa "csv", para mantener compatibilidad con configuraciones anteriores.
 
     Args:
         config: configuracion del pipeline.
@@ -69,16 +153,22 @@ def cargar_datos(config: dict[str, Any]) -> pd.DataFrame:
         DataFrame con los datos sin transformar.
 
     Raises:
-        FileNotFoundError: si el dataset no existe.
+        FileNotFoundError: si la fuente es csv y el archivo no existe.
+        ValueError: si la fuente no es reconocida.
     """
     parametros = config["datos"]
-    ruta_datos = RAIZ_PROYECTO / parametros["ruta"]
+    fuente = parametros.get("fuente", "csv")
 
-    if not ruta_datos.exists():
-        raise FileNotFoundError(f"No se encontro el dataset: {ruta_datos}")
+    if fuente == "bigquery":
+        datos = _leer_bigquery(parametros["bigquery"])
+    elif fuente == "csv":
+        datos = _leer_csv(parametros)
+    else:
+        raise ValueError(
+            f"Fuente de datos no reconocida: {fuente}. Use 'bigquery' o 'csv'."
+        )
 
-    datos = pd.read_csv(ruta_datos, sep=parametros["separador"])
-    logger.info("Dataset cargado: %d filas, %d columnas", *datos.shape)
+    logger.info("Dataset cargado desde %s: %d filas, %d columnas", fuente, *datos.shape)
     return datos
 
     # ============================================================================
