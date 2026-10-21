@@ -38,7 +38,7 @@ repo_modelado_daniela_gerena/
 │   │   ├── Cargar_datos.ipynb            Materialización de la fuente
 │   │   ├── comprension_eda.ipynb         Análisis exploratorio
 │   │   ├── ft_engineering.py             Limpieza, features y partición
-│   │   ├── hueristic_model.py            Reglas duras de política de crédito
+│   │   ├── heuristic_model.py            Reglas duras de política de crédito
 │   │   ├── model_training_evaluation.py  Entrenamiento, comparación y evaluación
 │   │   ├── model_deploy.py               Lógica de decisión combinada
 │   │   ├── app.py                        Interfaz Streamlit
@@ -72,7 +72,7 @@ Crea el entorno virtual e instala las dependencias. Luego:
 .venv\Scripts\activate
 
 python mlops_pipeline\src\ft_engineering.py
-python mlops_pipeline\src\hueristic_model.py
+python mlops_pipeline\src\heuristic_model.py
 python mlops_pipeline\src\model_training_evaluation.py
 python mlops_pipeline\src\model_deploy.py
 python mlops_pipeline\src\model_monitoring.py
@@ -83,6 +83,24 @@ streamlit run mlops_pipeline\src\app.py
 Toda la parametrización vive en `mlops_pipeline/config.json`: rutas, umbrales,
 reglas de calidad, reglas de negocio y listas de variables. El código no
 contiene valores fijos.
+
+### Fuente de datos en Google Cloud
+
+El dataset se lee desde BigQuery, en la tabla
+`retail-apps-datos-dev-01.creditos.dbcreditos`, definida en la sección `datos`
+de `config.json`. La autenticación usa las credenciales del propio usuario, sin
+descargar llaves de cuentas de servicio:
+
+```powershell
+gcloud auth application-default login
+gcloud auth application-default set-quota-project retail-apps-datos-dev-01
+```
+
+La consulta ordena las filas por su contenido completo, porque BigQuery no
+garantiza el orden de un `SELECT *` y la partición train/test depende de él.
+Los tipos se normalizan para que el pipeline reciba lo mismo que con el
+archivo plano. Para trabajar sin conexión, basta cambiar `"fuente": "bigquery"`
+por `"fuente": "csv"` en `config.json`: se usa `Base_de_datos.csv`.
 
 ---
 

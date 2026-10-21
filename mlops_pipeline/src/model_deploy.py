@@ -31,6 +31,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ft_engineering import (  # noqa: E402
     cargar_config,
+    cargar_datos,
     construir_pipeline_limpieza,
 )
 from heuristic_model import construir_modelo  # noqa: E402
@@ -215,10 +216,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
     config = cargar_config()
-    muestra = pd.read_csv(
-        RAIZ_PROYECTO / config["datos"]["ruta"],
-        sep=config["datos"]["separador"],
-    ).head(200)
+    muestra = cargar_datos(config).head(200)
 
     decisiones = decidir(muestra, config)
     logger.info("\n%s", resumir_decisiones(decisiones).to_string(index=False))

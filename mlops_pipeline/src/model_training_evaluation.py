@@ -1106,13 +1106,13 @@ def main() -> None:
     generar_graficos(mediciones, resumen, ganador["pipeline"],
                      X_test, y_test, raiz / "mlops_pipeline" / "reportes")
 
-    from ft_engineering import construir_pipeline_limpieza
+    from ft_engineering import cargar_datos, construir_pipeline_limpieza
 
     pipeline_limpieza = construir_pipeline_limpieza(config)
     pipeline_limpieza.fit_transform(
-        pd.read_csv(
-            raiz / config["datos"]["ruta"], sep=config["datos"]["separador"]
-        ).drop(columns=[config["datos"]["columna_objetivo"]], errors="ignore")
+        cargar_datos(config).drop(
+            columns=[config["datos"]["columna_objetivo"]], errors="ignore"
+        )
     )
 
     guardar_modelo(
