@@ -151,5 +151,9 @@
     "bins_psi": 10,
     "tasa_rechazo_esperada": 0.07,
     "tolerancia_tasa_rechazo": 0.03
+  },
+    "validacion": {
+    "pr_auc_minimo": 0.08,
+    "fuente": "Piso de aprobacion del pipeline CI. El modelo alcanza ~0.11 de PR-AUC en test; 0.08 deja margen por ruido y sigue siendo un filtro real."
   }
 }
