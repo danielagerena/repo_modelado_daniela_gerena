@@ -11,6 +11,30 @@
 // El job se configura como "Pipeline script from SCM" apuntando a este archivo,
 // de modo que el Jenkinsfile quede versionado en el propio repositorio.
 
+// Envia una notificacion a un webhook (Discord) al terminar el pipeline.
+// La URL se guarda como credencial 'webhook-url' (Secret text) en Jenkins.
+// El envio es best-effort: si el webhook falla, no se tumba el build.
+def notificar(String mensaje) {
+    withCredentials([string(credentialsId: 'webhook-url', variable: 'WEBHOOK')]) {
+        withEnv(["MENSAJE=${mensaje}"]) {
+            sh '''
+                python3 - <<'PY'
+import json, os, urllib.request
+url = os.environ["WEBHOOK"]
+payload = json.dumps({"content": os.environ["MENSAJE"]}).encode("utf-8")
+req = urllib.request.Request(
+    url, data=payload, headers={"Content-Type": "application/json"})
+try:
+    urllib.request.urlopen(req, timeout=15)
+    print("Notificacion enviada.")
+except Exception as e:
+    print("No se pudo enviar la notificacion:", e)
+PY
+            '''
+        }
+    }
+}
+
 pipeline {
     agent any
 
@@ -119,10 +143,13 @@ pipeline {
 
     post {
         success {
-            echo "Build EXITOSO. Resultado: ${currentBuild.currentResult}"
+            notificar("✅ ${JOB_NAME} #${BUILD_NUMBER}: build EXITOSO. develop integrado a master. ${BUILD_URL}")
         }
         failure {
-            echo "Build FALLIDO. Resultado: ${currentBuild.currentResult}"
+            notificar("❌ ${JOB_NAME} #${BUILD_NUMBER}: build FALLIDO. Revisar: ${BUILD_URL}")
+        }
+        aborted {
+            notificar("⚠️ ${JOB_NAME} #${BUILD_NUMBER}: build ABORTADO. Integracion no aprobada. ${BUILD_URL}")
         }
         always {
             echo "Fin del pipeline. Estado final: ${currentBuild.currentResult}"
