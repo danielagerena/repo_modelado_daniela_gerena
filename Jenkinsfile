@@ -85,9 +85,34 @@ pipeline {
 
         stage('Integrar a master') {
             steps {
-                // Placeholder: en 1b.3 se conecta aqui el merge real develop -> master
-                // usando un token de GitHub guardado como credencial de Jenkins.
-                echo 'APROBADO. (Pendiente 1b.3: merge real develop -> master con token de GitHub.)'
+                echo 'Paso 6: integrando develop en master tras la aprobacion...'
+                // La credencial 'github-token' (usuario + token) se define en Jenkins.
+                // Jenkins enmascara GIT_TOKEN en el log automaticamente.
+                withCredentials([usernamePassword(
+                        credentialsId: 'github-token',
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_TOKEN')]) {
+                    sh '''
+                        set -e
+                        git config user.email "danigerena.lopera@gmail.com"
+                        git config user.name  "Jenkins CI"
+
+                        # Trae ambas ramas de forma explicita (el checkout del job solo
+                        # garantiza la rama construida).
+                        git fetch origin \
+                            +refs/heads/master:refs/remotes/origin/master \
+                            +refs/heads/develop:refs/remotes/origin/develop
+
+                        # Posiciona master local en el estado remoto y fusiona develop.
+                        git checkout -B master origin/master
+                        git merge --no-ff origin/develop \
+                            -m "CI: integra develop en master tras aprobacion (build ${BUILD_NUMBER})"
+
+                        # Publica master usando el token (queda enmascarado en el log).
+                        git push "https://${GIT_USER}:${GIT_TOKEN}@github.com/danielagerena/repo_modelado_daniela_gerena.git" master
+                    '''
+                }
+                echo 'Integracion completada: master actualizado con los cambios de develop.'
             }
         }
     }
