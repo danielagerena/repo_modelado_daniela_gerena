@@ -703,3 +703,4 @@ pruebas unitarias. Los demás indicadores sí reflejan el estado del código.
 - [x] Despliegue
 - [x] Monitoreo y datadrift
 - [x] Análisis de código con SonarCloud
+---
