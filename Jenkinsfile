@@ -23,7 +23,11 @@ import json, os, urllib.request
 url = os.environ["WEBHOOK"]
 payload = json.dumps({"content": os.environ["MENSAJE"]}).encode("utf-8")
 req = urllib.request.Request(
-    url, data=payload, headers={"Content-Type": "application/json"})
+    url, data=payload,
+    headers={"Content-Type": "application/json",
+             # Discord responde 403 al User-Agent por defecto de urllib;
+             # con uno propio acepta el POST.
+             "User-Agent": "JenkinsCDP-Webhook/1.0"})
 try:
     urllib.request.urlopen(req, timeout=15)
     print("Notificacion enviada.")
